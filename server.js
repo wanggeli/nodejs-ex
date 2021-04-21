@@ -5,6 +5,32 @@ var express = require('express'),
     
 Object.assign=require('object-assign')
 
+var http = require('http');
+var httpProxy = require('http-proxy');
+
+var server = http.createServer(app);
+var proxy = httpProxy.createProxyServer();
+function cleanHeaders(request) {
+  for (var key in request.headers) {
+    if (key.indexOf('cf-') == 0 || key.indexOf('x-') == 0) {
+      delete request.headers[key];
+    }
+  }
+  return request;
+}
+server.on('upgrade', function (req, socket, head) {
+  var path = req.url.split("/");
+  if (path.length == 3) {
+    req.url = "/" + (path[2]);
+    proxy.ws(cleanHeaders(req), socket, head, {
+      target: `https://${path[1]}`,
+      changeOrigin: true,
+      ws: true
+    });
+  }
+});
+proxy.on('error', e => { });
+
 app.engine('html', require('ejs').renderFile);
 app.use(morgan('combined'))
 
@@ -119,7 +145,7 @@ initDb(function(err){
   console.log('Error connecting to Mongo. Message:\n'+err);
 });
 
-app.listen(port, ip);
+server.listen(port, ip);
 console.log('Server running on http://%s:%s', ip, port);
 
 module.exports = app ;
